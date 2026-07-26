@@ -1,0 +1,29 @@
+services:
+  api:
+    build: ./backend
+    environment:
+      REPOSAGE_CORS_ORIGINS: ${REPOSAGE_CORS_ORIGINS:-http://localhost:3000}
+      REPOSAGE_MAX_FILE_SIZE_BYTES: ${REPOSAGE_MAX_FILE_SIZE_BYTES:-750000}
+      REPOSAGE_MAX_REPOSITORY_FILES: ${REPOSAGE_MAX_REPOSITORY_FILES:-3000}
+      REPOSAGE_CHUNK_SIZE: ${REPOSAGE_CHUNK_SIZE:-1200}
+      REPOSAGE_CHUNK_OVERLAP: ${REPOSAGE_CHUNK_OVERLAP:-160}
+      REPOSAGE_EMBEDDING_DIMENSIONS: ${REPOSAGE_EMBEDDING_DIMENSIONS:-256}
+    ports:
+      - "8000:8000"
+    volumes:
+      - reposage-data:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  reposage-data:

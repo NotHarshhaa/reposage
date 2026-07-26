@@ -1,8 +1,44 @@
-# RepoSage
+# 🚀 RepoSage
+ 
+> Chat with any public GitHub repository using Retrieval-Augmented Generation (RAG).
+ 
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
+![LangChain](https://img.shields.io/badge/LangChain-RAG-orange)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20DB-red)
+![Next.js](https://img.shields.io/badge/Next.js-Frontend-black)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+ 
+---
+ 
+## 📖 Overview
+ 
+RepoSage is an open-source AI application that lets developers **chat with any public GitHub repository**.
+ 
+Instead of manually reading through hundreds of files, RepoSage clones a repository, indexes its source code and documentation, generates vector embeddings, and enables natural-language conversations about the codebase — powered by a Large Language Model (LLM).
+ 
+Whether you're exploring an unfamiliar open-source project or onboarding to a new codebase, RepoSage helps you understand a repository in minutes instead of hours.
+ 
+---
+ 
+## ✨ Features
+ 
+- 🔗 Index any public GitHub repository
+- 📂 Parse source code and documentation
+- 📝 Support for Markdown, source code, YAML, JSON, and config files
+- ✂️ Smart, language-aware document chunking
+- 🧠 Semantic vector search
+- 🤖 AI-powered question answering with source citations
+- ⚡ Streaming responses
+- 🔍 Repository-wide search
+- 🐳 Docker support
+- 🌙 Modern web interface
+- 🔌 REST API
+- 🧩 Modular, pluggable architecture (swap LLMs, embeddings, vector stores)
 
-RepoSage turns a public GitHub repository into a locally searchable knowledge base. Paste a repository URL, then ask questions about code, configuration, documentation, or workflows. Every response includes the indexed file chunks that supported it.
+---
 
-## What is included
+## 🔍 What is included
 
 - FastAPI REST API with OpenAPI docs at `http://localhost:8000/docs`
 - Safe public GitHub URL validation and shallow cloning with GitPython
@@ -14,7 +50,9 @@ RepoSage turns a public GitHub repository into a locally searchable knowledge ba
 
 The out-of-the-box answerer is intentionally **local and extractive**: it summarizes retrieved repository snippets without an API key or transmitting source to a provider. `backend/embeddings/hashing.py` and `backend/llm/extractive.py` are isolated adapter seams for OpenAI, Gemini, Ollama, BGE, Nomic, Qdrant, Chroma, or FAISS integrations.
 
-## Quick start
+---
+
+## 🚀 Quick start
 
 ### Docker (recommended)
 
@@ -46,7 +84,9 @@ npm run dev
 
 On Unix-like shells, activate the venv with `source .venv/bin/activate`.
 
-## API
+---
+
+## 🔍 API
 
 | Method | Endpoint | Purpose |
 |---|---|---|
@@ -59,18 +99,24 @@ On Unix-like shells, activate the venv with `source .venv/bin/activate`.
 
 Indexing is synchronous in this MVP so the `POST /api/repositories` response is immediately ready for querying. The backend accepts only clean `https://github.com/owner/repository` URLs, rejects embedded credentials and query strings, limits individual file sizes, skips dependencies/build output, and stores clones and indexes under `backend/data` (or `REPOSAGE_DATA_DIR`).
 
-## Configuration
+---
+
+## 🔍 Configuration
 
 Copy `.env.example` to `.env`. Settings use the `REPOSAGE_` prefix, including `REPOSAGE_DATA_DIR`, `REPOSAGE_MAX_FILE_SIZE_BYTES`, `REPOSAGE_MAX_REPOSITORY_FILES`, and chunk/vector settings. Set `NEXT_PUBLIC_API_URL` when the browser should access an API at a non-default origin. It is a build-time value for the Docker web image.
 
-## Validation
+---
+
+## 🔍 Validation
 
 ```bash
 cd backend && pytest -q
 cd frontend && npm run typecheck && npm run build
 ```
 
-## Project layout
+---
+
+## 📂 Project layout
 
 ```text
 backend/
@@ -89,6 +135,54 @@ frontend/
 docker-compose.yml
 ```
 
-## Current scope
+---
+
+## 🔍 Current scope
 
 This runnable initial release provides local retrieval with transparent citations. Remote generative answers, streaming, background indexing, hybrid/BM25 retrieval, reranking, GitHub authentication, and additional vector/embedding providers are deliberate extension points rather than hidden or partially configured features.
+
+---
+
+## 🤝🏻 Pluggable Providers
+ 
+RepoSage uses an adapter pattern so these can be swapped via config — **default is bolded**, others are supported but may need additional setup.
+ 
+| Category | Options |
+|---|---|
+| LLM | **OpenAI**, Google Gemini, Ollama (local models) |
+| Embeddings | **OpenAI Embeddings**, Gemini Embeddings, BGE, Nomic |
+| Vector DB | **Qdrant**, Chroma, FAISS |
+ 
+---
+
+## 📂 📄 Supported Languages & Files
+ 
+**Code:** Python, JavaScript, TypeScript, Go, Java, C#, Rust, C++, Shell, Terraform
+ 
+**Config & Docs:** Dockerfile, YAML, JSON, Markdown, README, environment files, GitHub Actions workflows, Docker Compose, Kubernetes manifests
+ 
+---
+
+## 🤝 Contributing
+ 
+Contributions are welcome!
+ 
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Open a Pull Request
+Bug reports, feature requests, and documentation improvements are always appreciated.
+ 
+---
+ 
+## 📜 License
+ 
+This project is licensed under the [MIT License](LICENSE).
+ 
+---
+ 
+## 🌟 Why RepoSage?
+ 
+Understanding large repositories can be overwhelming. RepoSage turns a repository into a searchable knowledge base — surfacing architecture, configuration, workflows, and implementation details through conversation instead of manual file-hunting.
+ 
+If you find this project useful, consider giving it a ⭐ on GitHub!

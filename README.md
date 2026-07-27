@@ -1,64 +1,33 @@
 # 🚀 RepoSage
- 
+
 > Chat with any public GitHub repository using Retrieval-Augmented Generation (RAG).
- 
+
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
-![LangChain](https://img.shields.io/badge/LangChain-RAG-orange)
 ![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20DB-red)
 ![Next.js](https://img.shields.io/badge/Next.js-Frontend-black)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
- 
----
- 
+
 ## 📖 Overview
- 
-RepoSage is an open-source AI application that lets developers **chat with any public GitHub repository**.
- 
-Instead of manually reading through hundreds of files, RepoSage clones a repository, indexes its source code and documentation, generates vector embeddings, and enables natural-language conversations about the codebase — powered by a Large Language Model (LLM).
- 
-Whether you're exploring an unfamiliar open-source project or onboarding to a new codebase, RepoSage helps you understand a repository in minutes instead of hours.
- 
----
- 
+
+RepoSage clones a public GitHub repository, indexes source and documentation, and provides source-cited search and chat. Its LLM, embedding, and vector-store providers are configured through environment variables, so it can run entirely locally or use hosted services.
+
 ## ✨ Features
- 
-- 🔗 Index any public GitHub repository
-- 📂 Parse source code and documentation
-- 📝 Support for Markdown, source code, YAML, JSON, and config files
-- ✂️ Smart, language-aware document chunking
-- 🧠 Semantic vector search
-- 🤖 AI-powered question answering with source citations
-- ⚡ Streaming responses
-- 🔍 Repository-wide search
-- 🐳 Docker support
-- 🌙 Modern web interface
-- 🔌 REST API
-- 🧩 Modular, pluggable architecture (swap LLMs, embeddings, vector stores)
 
----
-
-## 🔍 What is included
-
-- FastAPI REST API with OpenAPI docs at `http://localhost:8000/docs`
-- Safe public GitHub URL validation and shallow cloning with GitPython
-- Guarded discovery for code, docs, YAML/JSON, Docker, and common config files
-- Line-preserving chunking and local hashed vector embeddings
-- Persisted JSON vector index, repository list, semantic-style search, and grounded chat citations
-- Next.js + TypeScript + Tailwind interface for indexing and chat
-- Docker Compose and an API test suite
-
-The out-of-the-box answerer is intentionally **local and extractive**: it summarizes retrieved repository snippets without an API key or transmitting source to a provider. `backend/embeddings/hashing.py` and `backend/llm/extractive.py` are isolated adapter seams for OpenAI, Gemini, Ollama, BGE, Nomic, Qdrant, Chroma, or FAISS integrations.
-
----
+- Index public GitHub repositories with safe URL validation and shallow cloning
+- Parse code, Markdown, JSON, YAML, Docker, and common configuration files
+- Language-aware chunking, semantic search, and source citations
+- Configurable LLM, embedding, and vector-store providers
+- Local-first defaults requiring neither credentials nor a remote service
+- FastAPI REST API, Next.js interface, Docker Compose, and automated tests
 
 ## 🚀 Quick start
 
-### Docker (recommended)
+### Docker
 
 ```bash
 copy .env.example .env
-# Edit .env only if you need non-default limits/origins.
+# Keep the local defaults, or select providers in .env.
 docker compose up --build
 ```
 
@@ -82,9 +51,7 @@ npm install
 npm run dev
 ```
 
-On Unix-like shells, activate the venv with `source .venv/bin/activate`.
-
----
+On Unix-like shells, activate the Python environment with `source .venv/bin/activate`.
 
 ## 🔍 API
 
@@ -97,15 +64,61 @@ On Unix-like shells, activate the venv with `source .venv/bin/activate`.
 | `POST` | `/api/search` | Search `{ "repository_id", "query", "limit" }` |
 | `POST` | `/api/chat` | Ask `{ "repository_id", "question", "history", "limit" }` |
 
-Indexing is synchronous in this MVP so the `POST /api/repositories` response is immediately ready for querying. The backend accepts only clean `https://github.com/owner/repository` URLs, rejects embedded credentials and query strings, limits individual file sizes, skips dependencies/build output, and stores clones and indexes under `backend/data` (or `REPOSAGE_DATA_DIR`).
+Indexing is synchronous in this release: a successful `POST /api/repositories` response is immediately queryable. The backend accepts clean `https://github.com/owner/repository` URLs, rejects embedded credentials and query strings, limits file sizes, and skips dependencies and build output.
 
----
+## 🤝🏻 Pluggable providers
 
-## 🔍 Configuration
+All providers are implemented and selected with `REPOSAGE_` environment variables. The **bold** entries are the default local configuration.
 
-Copy `.env.example` to `.env`. Settings use the `REPOSAGE_` prefix, including `REPOSAGE_DATA_DIR`, `REPOSAGE_MAX_FILE_SIZE_BYTES`, `REPOSAGE_MAX_REPOSITORY_FILES`, and chunk/vector settings. Set `NEXT_PUBLIC_API_URL` when the browser should access an API at a non-default origin. It is a build-time value for the Docker web image.
+| Category | Providers | Notes |
+|---|---|---|
+| LLM | **Extractive**, OpenAI, Google Gemini, Ollama | Extractive answers from retrieved snippets without an API key. |
+| Embeddings | **Hashing**, OpenAI Embeddings, Gemini Embeddings, BGE, Nomic | BGE is local through `sentence-transformers`; its model downloads on first use. |
+| Vector store | **Local JSON**, Qdrant, persistent Chroma, FAISS | Qdrant supports a server or Qdrant Cloud; Chroma and FAISS persist under the data directory by default. |
 
----
+Remote LLM and embedding selections send retrieved repository chunks to that provider. Qdrant also stores chunk text and vectors at the configured Qdrant endpoint. Keep the default providers, BGE, Chroma, or FAISS for a local-only deployment.
+
+### Configuration
+
+Copy `.env.example` to `.env`. Docker Compose passes all documented provider settings into the API container. For local backend development, export the variables in your shell or place the relevant settings in `backend/.env`.
+
+Provider model variables are shared per category, so always set the model appropriate for the selected provider:
+
+```dotenv
+# OpenAI LLM + embeddings + Qdrant
+REPOSAGE_LLM_PROVIDER=openai
+REPOSAGE_LLM_MODEL=gpt-4o-mini
+REPOSAGE_EMBEDDING_PROVIDER=openai
+REPOSAGE_EMBEDDING_MODEL=text-embedding-3-small
+REPOSAGE_OPENAI_API_KEY=replace-me
+REPOSAGE_VECTOR_STORE_PROVIDER=qdrant
+REPOSAGE_QDRANT_URL=https://your-cluster.example.cloud.qdrant.io
+REPOSAGE_QDRANT_API_KEY=replace-me
+```
+
+```dotenv
+# Gemini LLM + embeddings + persistent local Chroma
+REPOSAGE_LLM_PROVIDER=gemini
+REPOSAGE_LLM_MODEL=gemini-2.0-flash
+REPOSAGE_EMBEDDING_PROVIDER=gemini
+REPOSAGE_EMBEDDING_MODEL=text-embedding-004
+REPOSAGE_GEMINI_API_KEY=replace-me
+REPOSAGE_VECTOR_STORE_PROVIDER=chroma
+```
+
+```dotenv
+# Fully local Ollama LLM + BGE embeddings + FAISS
+REPOSAGE_LLM_PROVIDER=ollama
+REPOSAGE_LLM_MODEL=llama3.2
+REPOSAGE_OLLAMA_BASE_URL=http://localhost:11434
+REPOSAGE_EMBEDDING_PROVIDER=bge
+REPOSAGE_BGE_MODEL=BAAI/bge-small-en-v1.5
+REPOSAGE_VECTOR_STORE_PROVIDER=faiss
+```
+
+For Docker Desktop, Ollama normally uses `REPOSAGE_OLLAMA_BASE_URL=http://host.docker.internal:11434`. See `.env.example` for every setting, including custom provider endpoints, request timeout, Qdrant collection prefix, and Chroma/FAISS persistence paths.
+
+> **Re-index after changing embedding or vector-store providers.** Existing vectors may use a different model or dimension and are not portable between providers.
 
 ## 🔍 Validation
 
@@ -114,75 +127,35 @@ cd backend && pytest -q
 cd frontend && npm run typecheck && npm run build
 ```
 
----
-
 ## 📂 Project layout
 
 ```text
 backend/
   api/             FastAPI application and routes
-  ingestion/       GitHub validation, cloning, and file discovery
-  embeddings/      Pluggable embedding adapter seam
-  retrieval/       Chunking and vector retrieval
-  vectorstore/     Persisted local vector-store adapter
-  llm/             Grounded answerer adapter seam
+  config/          Environment-backed provider settings
+  embeddings/      Hashing, OpenAI, Gemini, BGE, and Nomic adapters
+  retrieval/       Chunking and result/citation handling
+  vectorstore/     Local JSON, Qdrant, Chroma, and FAISS adapters
+  llm/             Extractive, OpenAI, Gemini, and Ollama adapters
   services/        Indexing and query orchestration
-  tests/           API tests
+  tests/           API and provider tests
 frontend/
   app/             Next.js interface and styles
-  components/      Indexing, chat, and citation UI
+  components/      shadcn/ui and HugeIcons interface components
   lib/             Typed API client
 docker-compose.yml
 ```
 
----
+## 📂 📄 Supported languages & files
 
-## 🔍 Current scope
-
-This runnable initial release provides local retrieval with transparent citations. Remote generative answers, streaming, background indexing, hybrid/BM25 retrieval, reranking, GitHub authentication, and additional vector/embedding providers are deliberate extension points rather than hidden or partially configured features.
-
----
-
-## 🤝🏻 Pluggable Providers
- 
-RepoSage uses an adapter pattern so these can be swapped via config — **default is bolded**, others are supported but may need additional setup.
- 
-| Category | Options |
-|---|---|
-| LLM | **OpenAI**, Google Gemini, Ollama (local models) |
-| Embeddings | **OpenAI Embeddings**, Gemini Embeddings, BGE, Nomic |
-| Vector DB | **Qdrant**, Chroma, FAISS |
- 
----
-
-## 📂 📄 Supported Languages & Files
- 
 **Code:** Python, JavaScript, TypeScript, Go, Java, C#, Rust, C++, Shell, Terraform
- 
-**Config & Docs:** Dockerfile, YAML, JSON, Markdown, README, environment files, GitHub Actions workflows, Docker Compose, Kubernetes manifests
- 
----
+
+**Config & docs:** Dockerfile, YAML, JSON, Markdown, README, environment files, GitHub Actions workflows, Docker Compose, and Kubernetes manifests.
 
 ## 🤝 Contributing
- 
-Contributions are welcome!
- 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Open a Pull Request
-Bug reports, feature requests, and documentation improvements are always appreciated.
- 
----
- 
+
+Contributions are welcome: fork the repository, create a feature branch, commit your changes, and open a pull request.
+
 ## 📜 License
- 
+
 This project is licensed under the [MIT License](LICENSE).
- 
----
- 
-## 🌟 Why RepoSage?
- 
-Understanding large repositories can be overwhelming. RepoSage turns a repository into a searchable knowledge base — surfacing architecture, configuration, workflows, and implementation details through conversation instead of manual file-hunting.
- 
-If you find this project useful, consider giving it a ⭐ on GitHub!

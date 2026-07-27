@@ -5,3 +5,7 @@ pydantic-settings==2.7.1
 GitPython==3.1.44
 pytest==8.3.4
 httpx==0.28.1
+qdrant-client==1.18.0
+chromadb==1.5.9
+faiss-cpu==1.14.3
+sentence-transformers==5.6.1

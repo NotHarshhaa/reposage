@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 from models.schemas import RepositoryIndex
+from vectorstore.base import VectorMatch, cosine_similarity
 
 
 class LocalVectorStore:
@@ -35,9 +35,13 @@ class LocalVectorStore:
                 continue
         return sorted(indexes, key=lambda index: index.indexed_at, reverse=True)
 
+    def search(self, repository_id: str, query_embedding: list[float], limit: int) -> list[VectorMatch]:
+        index = self.load(repository_id)
+        if not index:
+            return []
+        ranked = [VectorMatch(chunk, cosine_similarity(query_embedding, chunk.embedding)) for chunk in index.chunks]
+        return sorted((item for item in ranked if item.score > 0), key=lambda item: item.score, reverse=True)[:limit]
+
     @staticmethod
     def cosine_similarity(left: list[float], right: list[float]) -> float:
-        if not left or not right or len(left) != len(right):
-            return 0.0
-        denominator = math.sqrt(sum(v * v for v in left)) * math.sqrt(sum(v * v for v in right))
-        return sum(a * b for a, b in zip(left, right)) / denominator if denominator else 0.0
+        return cosine_similarity(left, right)

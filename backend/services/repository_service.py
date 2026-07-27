@@ -4,14 +4,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from config.settings import Settings
-from embeddings.hashing import HashEmbeddingProvider
+from embeddings.factory import create_embedding_provider
 from ingestion.github import GitHubRepository, clone_repository, parse_public_github_url
 from ingestion.loader import discover_source_files
-from llm.extractive import ExtractiveAnswerer
+from llm.factory import create_answer_provider
 from models.schemas import ChatResponse, RepositoryIndex, RepositorySummary, SearchResult
 from retrieval.chunking import chunk_source_file
 from retrieval.retriever import Retriever
-from vectorstore.local_store import LocalVectorStore
+from vectorstore.factory import create_vector_store
 
 
 class RepositoryNotFoundError(LookupError):
@@ -22,10 +22,10 @@ class RepositoryService:
     def __init__(self, settings: Settings) -> None:
         settings.ensure_directories()
         self.settings = settings
-        self.embeddings = HashEmbeddingProvider(settings.embedding_dimensions)
-        self.store = LocalVectorStore(settings.data_dir / "indexes")
+        self.embeddings = create_embedding_provider(settings)
+        self.store = create_vector_store(settings)
         self.retriever = Retriever(self.embeddings)
-        self.answerer = ExtractiveAnswerer()
+        self.answerer = create_answer_provider(settings)
 
     def index_repository(self, url: str) -> RepositorySummary:
         repository = parse_public_github_url(url)
@@ -63,13 +63,18 @@ class RepositoryService:
         return RepositorySummary.from_index(self._ready_index(repository_id))
 
     def search(self, repository_id: str, query: str, limit: int) -> SearchResult:
-        index = self._ready_index(repository_id)
-        return SearchResult(query=query, sources=self.retriever.citations(self.retriever.search(index.chunks, query, limit)))
+        self._ready_index(repository_id)
+        results = self._retrieve(repository_id, query, limit)
+        return SearchResult(query=query, sources=self.retriever.citations(results))
 
     def chat(self, repository_id: str, question: str, limit: int) -> ChatResponse:
-        index = self._ready_index(repository_id)
-        context = self.retriever.search(index.chunks, question, limit)
+        self._ready_index(repository_id)
+        context = self._retrieve(repository_id, question, limit)
         return ChatResponse(answer=self.answerer.answer(question, context), sources=self.retriever.citations(context))
+
+    def _retrieve(self, repository_id: str, query: str, limit: int):
+        query_embedding = self.retriever.query_embedding(query)
+        return self.retriever.from_matches(self.store.search(repository_id, query_embedding, limit))
 
     def _ready_index(self, repository_id: str) -> RepositoryIndex:
         index = self.store.load(repository_id)

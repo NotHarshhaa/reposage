@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from embeddings.hashing import EmbeddingProvider
 from models.schemas import Chunk, SourceCitation
-from vectorstore.local_store import LocalVectorStore
+from vectorstore.base import VectorMatch, cosine_similarity
 
 
 @dataclass(frozen=True)
@@ -17,12 +17,19 @@ class Retriever:
     def __init__(self, embeddings: EmbeddingProvider) -> None:
         self.embeddings = embeddings
 
+    def query_embedding(self, query: str) -> list[float]:
+        return self.embeddings.embed(query)
+
     def search(self, chunks: list[Chunk], query: str, limit: int) -> list[RetrievedChunk]:
-        query_embedding = self.embeddings.embed(query)
-        ranked = [RetrievedChunk(chunk, LocalVectorStore.cosine_similarity(query_embedding, chunk.embedding)) for chunk in chunks]
-        # A score of zero indicates no shared embedded features and is not useful context.
-        results = [item for item in ranked if item.score > 0]
-        return sorted(results, key=lambda item: item.score, reverse=True)[:limit]
+        query_embedding = self.query_embedding(query)
+        matches = [VectorMatch(chunk, cosine_similarity(query_embedding, chunk.embedding)) for chunk in chunks]
+        return self.from_matches(matches, limit)
+
+    @staticmethod
+    def from_matches(matches: list[VectorMatch], limit: int | None = None) -> list[RetrievedChunk]:
+        relevant = [RetrievedChunk(item.chunk, item.score) for item in matches if item.score > 0]
+        ranked = sorted(relevant, key=lambda item: item.score, reverse=True)
+        return ranked if limit is None else ranked[:limit]
 
     @staticmethod
     def citations(results: list[RetrievedChunk]) -> list[SourceCitation]:

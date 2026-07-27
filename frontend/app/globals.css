@@ -1,15 +1,47 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root { --ink: #e8e6e1; --muted: #a5aba8; --canvas: #121615; --surface: #1b201e; --surface-2: #242a27; --accent: #b7f35c; --accent-ink: #1f2d0c; --border: #354039; --danger: #ffb4a5; }
-* { box-sizing: border-box; }
-body { margin: 0; color: var(--ink); background: radial-gradient(circle at 75% -15%, #354724 0, transparent 35rem), var(--canvas); font-family: Arial, Helvetica, sans-serif; }
-button, input, textarea { font: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .55; }
-main { min-height: 100vh; max-width: 1440px; margin: auto; padding: 42px clamp(20px, 6vw, 96px) 52px; }
-.hero { max-width: 840px; margin-bottom: 42px; }.brand { color: var(--accent); font-weight: 800; font-size: 1.12rem; letter-spacing: .02em; }.eyebrow { color: var(--accent); font-size: .72rem; font-weight: 800; letter-spacing: .13em; margin: 24px 0 8px; text-transform: uppercase; }.hero h1 { letter-spacing: -.065em; font-size: clamp(2.8rem, 6vw, 5.3rem); line-height: .95; margin: 0; }.hero h1 em { color: var(--accent); font-style: normal; }.hero-copy { color: var(--muted); font-size: 1.05rem; line-height: 1.6; max-width: 640px; margin: 22px 0 0; }
-.workspace { display: grid; grid-template-columns: minmax(280px, .7fr) minmax(0, 1.7fr); gap: 20px; }.sidebar, .chat-panel { border: 1px solid var(--border); border-radius: 16px; background: color-mix(in srgb, var(--surface) 92%, transparent); }.sidebar { padding: 21px; align-self: start; }.repository-form label, .section-title h2 { font-size: .84rem; font-weight: 700; }.form-row { display: flex; gap: 8px; margin-top: 8px; } input, textarea { color: var(--ink); background: #111513; border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px; outline-color: var(--accent); } input { min-width: 0; flex: 1; } textarea { resize: vertical; width: 100%; }.form-row button, .chat-form button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 9px; font-weight: 800; padding: 0 14px; }.hint, .privacy-note { color: var(--muted); font-size: .76rem; line-height: 1.45; }.notice { color: var(--danger); font-size: .82rem; line-height: 1.4; background: #33221e; border-radius: 8px; padding: 10px; }.repository-list { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 14px; }.section-title { align-items: center; display: flex; justify-content: space-between; }.section-title h2 { margin: 0; }.section-title span { align-items: center; background: var(--surface-2); border-radius: 50%; color: var(--muted); display: flex; font-size: .7rem; height: 20px; justify-content: center; width: 20px; }.repository-item { background: transparent; border: 1px solid transparent; border-radius: 9px; color: var(--ink); display: block; margin-top: 8px; padding: 10px; text-align: left; width: 100%; }.repository-item:hover, .repository-item.selected { background: var(--surface-2); border-color: var(--border); }.repository-item strong, .repository-item small { display: block; }.repository-item strong { font-size: .84rem; }.repository-item small { color: var(--muted); font-size: .72rem; margin-top: 4px; }.privacy-note { border-top: 1px solid var(--border); margin: 20px 0 0; padding-top: 14px; }
-.chat-panel { display: flex; flex-direction: column; min-height: 620px; }.chat-header { align-items: center; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; padding: 21px 24px; }.chat-header .eyebrow { margin: 0 0 5px; }.chat-header h2 { font-size: 1.35rem; letter-spacing: -.025em; margin: 0; }.status-dot { color: var(--accent); font-size: .76rem; }.conversation { display: flex; flex: 1; flex-direction: column; gap: 16px; overflow-y: auto; padding: 24px; }.empty-state { color: var(--muted); line-height: 1.6; margin: auto; max-width: 400px; }.empty-state ul { padding-left: 18px; }.message { border-radius: 10px; max-width: 95%; padding: 13px 15px; }.message.user { align-self: flex-end; background: #2e4018; }.message.assistant { background: var(--surface-2); }.message-role { color: var(--accent); font-size: .68rem; font-weight: bold; letter-spacing: .08em; margin: 0 0 7px; text-transform: uppercase; }.message-content { font-size: .92rem; line-height: 1.55; white-space: pre-wrap; }.loading { color: var(--muted); }.chat-form { border-top: 1px solid var(--border); display: flex; gap: 10px; padding: 16px; }.chat-form button { padding: 0 20px; }.sources { margin-top: 15px; }.sources h3 { color: var(--muted); font-size: .72rem; margin: 0 0 7px; text-transform: uppercase; }.source-grid { display: grid; gap: 6px; }.source-card { background: #151a18; border: 1px solid var(--border); border-radius: 6px; font-size: .74rem; }.source-card summary { align-items: center; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; padding: 7px; }.source-card summary span { color: var(--muted); white-space: nowrap; }.source-card pre { border-top: 1px solid var(--border); color: #c7d0c5; font: .69rem/1.45 ui-monospace, monospace; margin: 0; max-height: 170px; overflow: auto; padding: 8px; white-space: pre-wrap; }
-@media (max-width: 850px) { main { padding-top: 28px; }.workspace { grid-template-columns: 1fr; }.chat-panel { min-height: 520px; }.sidebar { order: 2; }.form-row { flex-direction: column; }.form-row button { min-height: 40px; }.chat-form { flex-direction: column; }.chat-form button { min-height: 42px; }.source-card summary { align-items: flex-start; flex-direction: column; } }
+@layer base {
+  :root {
+    --background: 0.986 0.002 67.8;
+    --foreground: 0.147 0.004 49.3;
+    --card: 1 0 0;
+    --card-foreground: 0.147 0.004 49.3;
+    --popover: 1 0 0;
+    --popover-foreground: 0.147 0.004 49.3;
+    --primary: 0.214 0.009 43.1;
+    --primary-foreground: 0.986 0.002 67.8;
+    --secondary: 0.96 0.002 17.2;
+    --secondary-foreground: 0.214 0.009 43.1;
+    --muted: 0.96 0.002 17.2;
+    --muted-foreground: 0.547 0.021 43.1;
+    --accent: 0.96 0.002 17.2;
+    --accent-foreground: 0.214 0.009 43.1;
+    --destructive: 0.577 0.245 27.325;
+    --border: 0.922 0.005 34.3;
+    --input: 0.922 0.005 34.3;
+    --ring: 0.714 0.014 41.2;
+    --radius: 0.625rem;
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply bg-background font-serif;
+  }
+
+  body {
+    @apply min-h-screen bg-background text-foreground antialiased;
+  }
+
+  button,
+  input,
+  textarea {
+    font: inherit;
+  }
+}

@@ -1,17 +1,13 @@
 from __future__ import annotations
 
+from models.schemas import ChatTurn
 from retrieval.retriever import RetrievedChunk
 
 
 class ExtractiveAnswerer:
-    """Grounded fallback answerer that never invents repository details.
+    """Grounded fallback answerer that never invents repository details."""
 
-    A remote LLM adapter can replace this class. Keeping the fallback means a new
-    installation has useful search-and-explain behavior without sending source
-    code to a third-party API or requiring a key.
-    """
-
-    def answer(self, question: str, context: list[RetrievedChunk]) -> str:
+    def answer(self, question: str, context: list[RetrievedChunk], history: list[ChatTurn] | None = None) -> str:
         if not context:
             return (
                 "I couldn't find relevant indexed source for that question. Try using "

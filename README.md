@@ -1,37 +1,36 @@
 # 🚀 RepoSage
 
-> Chat with any public GitHub repository using Retrieval-Augmented Generation (RAG).
+> Search, browse, and chat with GitHub repositories using Retrieval-Augmented Generation (RAG).
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-green)
-![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20DB-red)
 ![Next.js](https://img.shields.io/badge/Next.js-Frontend-black)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
-## 📖 Overview
+## Overview
 
-RepoSage clones a public GitHub repository, indexes source and documentation, and provides source-cited search and chat. Its LLM, embedding, and vector-store providers are configured through environment variables, so it can run entirely locally or use hosted services.
+RepoSage shallow-clones a GitHub repository, indexes supported source and documentation files, and provides source-cited search and chat. Indexing runs in a bounded background worker with durable progress metadata, so the UI and API remain responsive while repositories are processed. The default hashing embeddings, extractive answerer, and JSON index run locally without credentials or a remote service.
 
-## ✨ Features
+## Features
 
-- Index public GitHub repositories with safe URL validation and shallow cloning
-- Parse code, Markdown, JSON, YAML, Docker, and common configuration files
-- Language-aware chunking, semantic search, and source citations
-- Configurable LLM, embedding, and vector-store providers
-- Local-first defaults requiring neither credentials nor a remote service
-- FastAPI REST API, Next.js interface, Docker Compose, and automated tests
+- Background indexing with queued/indexing/ready/failed status, progress, branch selection, re-indexing, and deletion
+- Public GitHub repositories plus optional private-repository clones with a per-request token that is never persisted
+- Source browsing API and UI with file list, full file previews, cited search results, and path/language filters
+- Hybrid semantic + lexical reranking, configurable score threshold, and source citations
+- Streaming chat over Server-Sent Events, with bounded conversation history and local/remote provider support
+- Optional API-key protection, per-client rate limiting, request IDs, request timing logs, Docker Compose, tests, and CI
+- Configurable LLM, embedding, and vector-store providers; local-first defaults keep source code on your machine
 
-## 🚀 Quick start
+## Quick start
 
 ### Docker
 
 ```bash
 copy .env.example .env
-# Keep the local defaults, or select providers in .env.
 docker compose up --build
 ```
 
-Open `http://localhost:3000`. The API is available at `http://localhost:8000`, with interactive docs at `/docs`.
+Open `http://localhost:3000`. The API is at `http://localhost:8000`, and interactive docs are at `/docs`.
 
 ### Local development
 
@@ -53,39 +52,53 @@ npm run dev
 
 On Unix-like shells, activate the Python environment with `source .venv/bin/activate`.
 
-## 🔍 API
+## API
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/health` | API health check |
-| `GET` | `/api/repositories` | List persisted indexes |
-| `POST` | `/api/repositories` | Clone and index `{ "url": "https://github.com/owner/repo" }` |
-| `GET` | `/api/repositories/{id}` | Get repository index metadata |
-| `POST` | `/api/search` | Search `{ "repository_id", "query", "limit" }` |
-| `POST` | `/api/chat` | Ask `{ "repository_id", "question", "history", "limit" }` |
+| `GET` | `/health` | Health, version, and selected provider metadata |
+| `GET` | `/api/repositories` | List repository indexes and background-job status |
+| `POST` | `/api/repositories` | Queue `{ "url", "branch?", "access_token?" }` for indexing; returns `202` |
+| `GET` | `/api/repositories/{id}` | Inspect status, progress, counts, and errors |
+| `POST` | `/api/repositories/{id}/reindex` | Queue a new index of an existing repository; returns `202` |
+| `DELETE` | `/api/repositories/{id}` | Delete the local clone and vector index |
+| `GET` | `/api/repositories/{id}/files` | List source files available to browse |
+| `GET` | `/api/repositories/{id}/files/{path}` | Read one indexed source file |
+| `POST` | `/api/search` | Filtered search: `{ "repository_id", "query", "languages?", "path_prefix?", "min_score?" }` |
+| `POST` | `/api/chat` | Non-streaming answer with `{ "repository_id", "question", "history?" }` |
+| `POST` | `/api/chat/stream` | Same request as chat, delivered as SSE `delta`, `sources`, and `done` events |
 
-Indexing is synchronous in this release: a successful `POST /api/repositories` response is immediately queryable. The backend accepts clean `https://github.com/owner/repository` URLs, rejects embedded credentials and query strings, limits file sizes, and skips dependencies and build output.
+Search and chat only accept repositories in `ready` state. Poll the repository detail endpoint (or use the UI) until `progress` reaches 100. A private-repository access token is sent only to Git during that clone: it is never written to the repository URL, Git config, application manifests, or logs. Supply it again for a private re-index.
 
-## 🤝🏻 Pluggable providers
+## Configuration and safeguards
 
-All providers are implemented and selected with `REPOSAGE_` environment variables. The **bold** entries are the default local configuration.
-
-| Category | Providers | Notes |
-|---|---|---|
-| LLM | **Extractive**, OpenAI, Google Gemini, Ollama | Extractive answers from retrieved snippets without an API key. |
-| Embeddings | **Hashing**, OpenAI Embeddings, Gemini Embeddings, BGE, Nomic | BGE is local through `sentence-transformers`; its model downloads on first use. |
-| Vector store | **Local JSON**, Qdrant, persistent Chroma, FAISS | Qdrant supports a server or Qdrant Cloud; Chroma and FAISS persist under the data directory by default. |
-
-Remote LLM and embedding selections send retrieved repository chunks to that provider. Qdrant also stores chunk text and vectors at the configured Qdrant endpoint. Keep the default providers, BGE, Chroma, or FAISS for a local-only deployment.
-
-### Configuration
-
-Copy `.env.example` to `.env`. Docker Compose passes all documented provider settings into the API container. For local backend development, export the variables in your shell or place the relevant settings in `backend/.env`.
-
-Provider model variables are shared per category, so always set the model appropriate for the selected provider:
+Copy `.env.example` to `.env`. All configuration keys are prefixed with `REPOSAGE_` for the backend.
 
 ```dotenv
-# OpenAI LLM + embeddings + Qdrant
+# Background indexing and optional perimeter controls
+REPOSAGE_INDEX_WORKERS=2
+REPOSAGE_API_KEY=
+REPOSAGE_RATE_LIMIT_REQUESTS_PER_MINUTE=0
+
+# If REPOSAGE_API_KEY is set, send this header to every /api request:
+# X-API-Key: <your value>
+# For the included browser client, set NEXT_PUBLIC_REPOSAGE_API_KEY to the same
+# value only for a trusted/private deployment. Never expose a production secret
+# through a publicly served frontend.
+```
+
+`REPOSAGE_API_KEY` is disabled when empty. `REPOSAGE_RATE_LIMIT_REQUESTS_PER_MINUTE=0` disables the in-process limiter; set a positive value for single-instance deployments. For multi-instance or internet-facing deployments, use a gateway/WAF and shared rate-limit store as well. API responses include `X-Request-ID`, and the API logs method, path, duration, and request ID (never access tokens). On startup, any index left `queued` or `indexing` by a previous process is marked `failed` so it can be re-indexed instead of appearing stuck.
+
+### Provider selection
+
+| Category | Providers | Default |
+|---|---|---|
+| LLM | Extractive, OpenAI, Google Gemini, Ollama | Extractive |
+| Embeddings | Hashing, OpenAI, Gemini, BGE, Nomic | Hashing |
+| Vector store | Local JSON, Qdrant, persistent Chroma, FAISS | Local JSON |
+
+```dotenv
+# Example: hosted OpenAI plus Qdrant
 REPOSAGE_LLM_PROVIDER=openai
 REPOSAGE_LLM_MODEL=gpt-4o-mini
 REPOSAGE_EMBEDDING_PROVIDER=openai
@@ -96,66 +109,41 @@ REPOSAGE_QDRANT_URL=https://your-cluster.example.cloud.qdrant.io
 REPOSAGE_QDRANT_API_KEY=replace-me
 ```
 
-```dotenv
-# Gemini LLM + embeddings + persistent local Chroma
-REPOSAGE_LLM_PROVIDER=gemini
-REPOSAGE_LLM_MODEL=gemini-2.0-flash
-REPOSAGE_EMBEDDING_PROVIDER=gemini
-REPOSAGE_EMBEDDING_MODEL=text-embedding-004
-REPOSAGE_GEMINI_API_KEY=replace-me
-REPOSAGE_VECTOR_STORE_PROVIDER=chroma
-```
+Remote LLM and embedding selections send retrieved repository chunks to that provider. Qdrant stores chunk text and vectors at its configured endpoint. Keep the default providers, BGE, Chroma, or FAISS for a local-only deployment. Re-index after changing embedding or vector-store providers.
 
-```dotenv
-# Fully local Ollama LLM + BGE embeddings + FAISS
-REPOSAGE_LLM_PROVIDER=ollama
-REPOSAGE_LLM_MODEL=llama3.2
-REPOSAGE_OLLAMA_BASE_URL=http://localhost:11434
-REPOSAGE_EMBEDDING_PROVIDER=bge
-REPOSAGE_BGE_MODEL=BAAI/bge-small-en-v1.5
-REPOSAGE_VECTOR_STORE_PROVIDER=faiss
-```
-
-For Docker Desktop, Ollama normally uses `REPOSAGE_OLLAMA_BASE_URL=http://host.docker.internal:11434`. See `.env.example` for every setting, including custom provider endpoints, request timeout, Qdrant collection prefix, and Chroma/FAISS persistence paths.
-
-> **Re-index after changing embedding or vector-store providers.** Existing vectors may use a different model or dimension and are not portable between providers.
-
-## 🔍 Validation
+## Validation
 
 ```bash
 cd backend && pytest -q
 cd frontend && npm run typecheck && npm run build
 ```
 
-## 📂 Project layout
+GitHub Actions runs these backend and frontend checks for pushes and pull requests.
+
+## Project layout
 
 ```text
 backend/
   api/             FastAPI application and routes
-  config/          Environment-backed provider settings
-  embeddings/      Hashing, OpenAI, Gemini, BGE, and Nomic adapters
-  retrieval/       Chunking and result/citation handling
+  config/          Environment-backed provider and safeguard settings
+  ingestion/       GitHub cloning and safe source discovery
+  retrieval/       Chunking, hybrid reranking, and citations
+  services/        Background index jobs and query orchestration
   vectorstore/     Local JSON, Qdrant, Chroma, and FAISS adapters
-  llm/             Extractive, OpenAI, Gemini, and Ollama adapters
-  services/        Indexing and query orchestration
   tests/           API and provider tests
 frontend/
   app/             Next.js interface and styles
-  components/      shadcn/ui and HugeIcons interface components
-  lib/             Typed API client
-docker-compose.yml
+  components/      Repository, chat, search, and source-browser UI
+  lib/             Typed API client and SSE parser
+.github/workflows/ CI validation
 ```
 
-## 📂 📄 Supported languages & files
+## Supported files
 
 **Code:** Python, JavaScript, TypeScript, Go, Java, C#, Rust, C++, Shell, Terraform
 
 **Config & docs:** Dockerfile, YAML, JSON, Markdown, README, environment files, GitHub Actions workflows, Docker Compose, and Kubernetes manifests.
 
-## 🤝 Contributing
-
-Contributions are welcome: fork the repository, create a feature branch, commit your changes, and open a pull request.
-
-## 📜 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).

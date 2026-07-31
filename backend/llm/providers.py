@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from llm.base import AnswerProvider, grounded_prompt
+from models.schemas import ChatTurn
 from retrieval.retriever import RetrievedChunk
 
 
@@ -34,14 +35,14 @@ class OpenAIAnswerProvider:
         self.temperature = temperature
         self.timeout = timeout
 
-    def answer(self, question: str, context: list[RetrievedChunk]) -> str:
+    def answer(self, question: str, context: list[RetrievedChunk], history: list[ChatTurn] | None = None) -> str:
         response = httpx.post(
             f"{self.base_url}/chat/completions",
             headers={"Authorization": f"Bearer {self.api_key}"},
             json={
                 "model": self.model,
                 "temperature": self.temperature,
-                "messages": [{"role": "user", "content": grounded_prompt(question, context)}],
+                "messages": [{"role": "user", "content": grounded_prompt(question, context, history)}],
             },
             timeout=self.timeout,
         )
@@ -57,12 +58,12 @@ class GeminiAnswerProvider:
         self.temperature = temperature
         self.timeout = timeout
 
-    def answer(self, question: str, context: list[RetrievedChunk]) -> str:
+    def answer(self, question: str, context: list[RetrievedChunk], history: list[ChatTurn] | None = None) -> str:
         response = httpx.post(
             f"{self.base_url}/models/{self.model}:generateContent",
             params={"key": self.api_key},
             json={
-                "contents": [{"role": "user", "parts": [{"text": grounded_prompt(question, context)}]}],
+                "contents": [{"role": "user", "parts": [{"text": grounded_prompt(question, context, history)}]}],
                 "generationConfig": {"temperature": self.temperature},
             },
             timeout=self.timeout,
@@ -79,12 +80,12 @@ class OllamaAnswerProvider:
         self.temperature = temperature
         self.timeout = timeout
 
-    def answer(self, question: str, context: list[RetrievedChunk]) -> str:
+    def answer(self, question: str, context: list[RetrievedChunk], history: list[ChatTurn] | None = None) -> str:
         response = httpx.post(
             f"{self.base_url}/api/generate",
             json={
                 "model": self.model,
-                "prompt": grounded_prompt(question, context),
+                "prompt": grounded_prompt(question, context, history),
                 "stream": False,
                 "options": {"temperature": self.temperature},
             },

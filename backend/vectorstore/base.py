@@ -21,6 +21,7 @@ class VectorStore(Protocol):
     def save(self, index: RepositoryIndex) -> None: ...
     def load(self, repository_id: str) -> RepositoryIndex | None: ...
     def list(self) -> list[RepositoryIndex]: ...
+    def delete(self, repository_id: str) -> None: ...
     def search(self, repository_id: str, query_embedding: list[float], limit: int) -> list[VectorMatch]: ...
 
 
@@ -60,6 +61,9 @@ class IndexManifestStore:
                 continue
         return sorted(indexes, key=lambda index: index.indexed_at, reverse=True)
 
+    def delete(self, repository_id: str) -> None:
+        (self.directory / f"{repository_id}.json").unlink(missing_ok=True)
+
 
 class RemoteVectorStore:
     """Base implementation that keeps index metadata locally and vectors remotely."""
@@ -72,8 +76,6 @@ class RemoteVectorStore:
             if not index.chunks:
                 raise ValueError("Cannot save a ready repository index without chunks.")
             self._replace_chunks(index.id, index.chunks)
-        else:
-            self._delete_chunks(index.id)
         self.manifest.save(index)
 
     def load(self, repository_id: str) -> RepositoryIndex | None:
@@ -84,6 +86,10 @@ class RemoteVectorStore:
 
     def list(self) -> list[RepositoryIndex]:
         return self.manifest.list()
+
+    def delete(self, repository_id: str) -> None:
+        self._delete_chunks(repository_id)
+        self.manifest.delete(repository_id)
 
     def search(self, repository_id: str, query_embedding: list[float], limit: int) -> list[VectorMatch]:
         return self._search_chunks(repository_id, query_embedding, limit)

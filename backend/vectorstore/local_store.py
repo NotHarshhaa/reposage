@@ -35,6 +35,9 @@ class LocalVectorStore:
                 continue
         return sorted(indexes, key=lambda index: index.indexed_at, reverse=True)
 
+    def delete(self, repository_id: str) -> None:
+        (self.index_directory / f"{repository_id}.json").unlink(missing_ok=True)
+
     def search(self, repository_id: str, query_embedding: list[float], limit: int) -> list[VectorMatch]:
         index = self.load(repository_id)
         if not index:

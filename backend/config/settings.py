@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +17,11 @@ class Settings(BaseSettings):
     max_repository_files: int = 3_000
     chunk_size: int = 1_200
     chunk_overlap: int = 160
+    index_workers: int = Field(default=2, ge=1, le=8)
+
+    # Optional perimeter controls. Empty/zero values preserve local-development behavior.
+    api_key: str | None = None
+    rate_limit_requests_per_minute: int = Field(default=0, ge=0, le=10_000)
 
     # Local providers are deliberately the defaults: no source code leaves the host.
     llm_provider: Literal["extractive", "openai", "gemini", "ollama"] = "extractive"

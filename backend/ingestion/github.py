@@ -26,10 +26,10 @@ class GitHubRepository:
 
 def parse_public_github_url(url: str) -> GitHubRepository:
     parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"github.com", "www.github.com"}:
-        raise ValueError("Only public https://github.com/owner/repository URLs are supported.")
+    if parsed.scheme != "https" or parsed.hostname not in {"github.com", "www.github.com"}:
+        raise ValueError("Only https://github.com/owner/repository URLs are supported.")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError("Use a clean public GitHub repository URL without credentials or query parameters.")
+        raise ValueError("Use a clean GitHub repository URL without credentials or query parameters.")
     match = _GITHUB_PATTERN.match(parsed.path)
     if not match:
         raise ValueError("Repository URL must have exactly an owner and repository name.")
@@ -38,13 +38,27 @@ def parse_public_github_url(url: str) -> GitHubRepository:
     return GitHubRepository(url=canonical_url, owner=owner, name=name)
 
 
-def clone_repository(repository: GitHubRepository, target: Path) -> str | None:
-    """Clone the configured public repository into a controlled application directory."""
+def clone_repository(
+    repository: GitHubRepository, target: Path, branch: str | None = None, access_token: str | None = None,
+) -> str | None:
+    """Shallow-clone into a controlled directory, optionally authenticating without persisting a token."""
     if target.exists():
         shutil.rmtree(target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    cloned = Repo.clone_from(repository.url, target, depth=1, multi_options=["--no-tags"])
+    options = ["--no-tags"]
+    clone_options: dict[str, object] = {"depth": 1, "multi_options": options}
+    if branch:
+        clone_options["branch"] = branch
+    # Git receives this header only in its process environment. The access token is not
+    # embedded in the remote URL, clone config, repository metadata, or application logs.
+    if access_token:
+        clone_options["env"] = {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+            "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: bearer {access_token}",
+        }
+    cloned = Repo.clone_from(repository.url, target, **clone_options)
     try:
         return cloned.active_branch.name
     except TypeError:
-        return None
+        return branch

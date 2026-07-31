@@ -8,14 +8,16 @@ from collections import defaultdict, deque
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
 from config.settings import Settings, get_settings
 from models.schemas import (
-    ChatRequest, ChatResponse, HealthResponse, IndexRepositoryRequest, ReindexRepositoryRequest,
-    RepositoryFile, RepositorySummary, SearchRequest, SearchResult,
+    ChatRequest, ChatResponse, Conversation, ConversationSummary, FileOutline, HealthResponse,
+    IndexRepositoryRequest, MetricsResponse, MultiSearchRequest, MultiSearchResult, ReindexRepositoryRequest,
+    RepositoryFile, RepositoryInsights, RepositorySummary, SaveConversationRequest, SearchRequest, SearchResult,
+    SimilarCodeRequest,
 )
 from services.repository_service import RepositoryBusyError, RepositoryNotFoundError, RepositoryService
 
@@ -175,6 +177,84 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         except Exception as exc:
             raise_service_error(exc)
+
+    @app.post("/api/repositories/{repository_id}/cancel", response_model=RepositorySummary, tags=["repositories"])
+    def cancel_indexing(repository_id: str) -> RepositorySummary:
+        try:
+            return service.cancel_indexing(repository_id)
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.get("/api/repositories/{repository_id}/insights", response_model=RepositoryInsights, tags=["analysis"])
+    def repository_insights(repository_id: str) -> RepositoryInsights:
+        try:
+            return service.insights(repository_id)
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.get("/api/repositories/{repository_id}/outline", response_model=FileOutline, tags=["analysis"])
+    def file_outline(repository_id: str, path: str = Query(min_length=1, max_length=500)) -> FileOutline:
+        try:
+            return service.outline(repository_id, path)
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.post("/api/search/all", response_model=MultiSearchResult, tags=["retrieval"])
+    def search_all(request: MultiSearchRequest) -> MultiSearchResult:
+        try:
+            return service.search_all(
+                request.query, request.limit_per_repository, request.repository_ids, request.languages, request.min_score,
+            )
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.post("/api/similar", response_model=SearchResult, tags=["retrieval"])
+    def similar_code(request: SimilarCodeRequest) -> SearchResult:
+        try:
+            return service.similar_code(request.repository_id, request.path, request.line, request.limit)
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.get("/api/conversations", response_model=list[ConversationSummary], tags=["conversations"])
+    def list_conversations(repository_id: str | None = Query(default=None, max_length=200)) -> list[ConversationSummary]:
+        return service.list_conversations(repository_id)
+
+    @app.post("/api/conversations", response_model=Conversation, status_code=status.HTTP_201_CREATED, tags=["conversations"])
+    def save_conversation(request: SaveConversationRequest) -> Conversation:
+        try:
+            return service.save_conversation(request.repository_id, request.messages, request.title)
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.get("/api/conversations/{conversation_id}", response_model=Conversation, tags=["conversations"])
+    def get_conversation(conversation_id: str) -> Conversation:
+        try:
+            return service.get_conversation(conversation_id)
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.get("/api/conversations/{conversation_id}/export", tags=["conversations"])
+    def export_conversation(conversation_id: str) -> PlainTextResponse:
+        try:
+            filename, markdown = service.export_conversation(conversation_id)
+            return PlainTextResponse(
+                markdown, media_type="text/markdown; charset=utf-8",
+                headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            )
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.delete("/api/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["conversations"])
+    def delete_conversation(conversation_id: str) -> Response:
+        try:
+            service.delete_conversation(conversation_id)
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+        except Exception as exc:
+            raise_service_error(exc)
+
+    @app.get("/api/metrics", response_model=MetricsResponse, tags=["system"])
+    def metrics() -> MetricsResponse:
+        return service.metrics()
 
     return app
 

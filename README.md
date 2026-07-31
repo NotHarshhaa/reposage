@@ -13,13 +13,14 @@ RepoSage shallow-clones a GitHub repository, indexes supported source and docume
 
 ## Features
 
-- Background indexing with queued/indexing/ready/failed status, progress, branch selection, re-indexing, and deletion
+- Background indexing with queued/indexing/ready/failed/cancelled status, progress, branch selection, re-indexing, cancellation, and deletion
 - Public GitHub repositories plus optional private-repository clones with a per-request token that is never persisted
-- Source browsing API and UI with file list, full file previews, cited search results, and path/language filters
-- Hybrid semantic + lexical reranking, configurable score threshold, and source citations
-- Streaming chat over Server-Sent Events, with bounded conversation history and local/remote provider support
-- Optional API-key protection, per-client rate limiting, request IDs, request timing logs, Docker Compose, tests, and CI
-- Configurable LLM, embedding, and vector-store providers; local-first defaults keep source code on your machine
+- Source browsing API and UI with file list, line-numbered previews, symbol outlines, cited search results, and path/language filters
+- Repository insights: language mix, indexed size, average chunk size, largest files, and documentation inventory
+- Hybrid semantic + lexical reranking, configurable score threshold, cross-repository search, and "find similar code" from any file
+- Streaming chat over Server-Sent Events, bounded conversation history, and saved conversations with Markdown export
+- Operational metrics endpoint, optional API-key protection, per-client rate limiting, request IDs, timing logs, Docker Compose, tests, and CI
+- Dark mode, configurable LLM/embedding/vector-store providers, and local-first defaults that keep source code on your machine
 
 ## Quick start
 
@@ -57,18 +58,31 @@ On Unix-like shells, activate the Python environment with `source .venv/bin/acti
 | Method | Endpoint | Purpose |
 |---|---|---|
 | `GET` | `/health` | Health, version, and selected provider metadata |
+| `GET` | `/api/metrics` | Repository counts by status, indexed totals, active jobs, saved conversations |
 | `GET` | `/api/repositories` | List repository indexes and background-job status |
 | `POST` | `/api/repositories` | Queue `{ "url", "branch?", "access_token?" }` for indexing; returns `202` |
 | `GET` | `/api/repositories/{id}` | Inspect status, progress, counts, and errors |
 | `POST` | `/api/repositories/{id}/reindex` | Queue a new index of an existing repository; returns `202` |
+| `POST` | `/api/repositories/{id}/cancel` | Cancel a queued or running index job |
 | `DELETE` | `/api/repositories/{id}` | Delete the local clone and vector index |
 | `GET` | `/api/repositories/{id}/files` | List source files available to browse |
 | `GET` | `/api/repositories/{id}/files/{path}` | Read one indexed source file |
+| `GET` | `/api/repositories/{id}/outline?path=` | Symbol outline (classes, functions, types, headings) for one file |
+| `GET` | `/api/repositories/{id}/insights` | Language mix, indexed size, largest files, documentation inventory |
 | `POST` | `/api/search` | Filtered search: `{ "repository_id", "query", "languages?", "path_prefix?", "min_score?" }` |
+| `POST` | `/api/search/all` | Search every ready repository: `{ "query", "repository_ids?", "limit_per_repository?" }` |
+| `POST` | `/api/similar` | Related chunks for `{ "repository_id", "path", "line?" }` |
 | `POST` | `/api/chat` | Non-streaming answer with `{ "repository_id", "question", "history?" }` |
 | `POST` | `/api/chat/stream` | Same request as chat, delivered as SSE `delta`, `sources`, and `done` events |
+| `GET` | `/api/conversations` | List saved conversations, optionally filtered by `repository_id` |
+| `POST` | `/api/conversations` | Save `{ "repository_id", "messages", "title?" }`; returns `201` |
+| `GET` | `/api/conversations/{id}` | Read one saved conversation with its cited sources |
+| `GET` | `/api/conversations/{id}/export` | Download the conversation as Markdown |
+| `DELETE` | `/api/conversations/{id}` | Delete a saved conversation |
 
-Search and chat only accept repositories in `ready` state. Poll the repository detail endpoint (or use the UI) until `progress` reaches 100. A private-repository access token is sent only to Git during that clone: it is never written to the repository URL, Git config, application manifests, or logs. Supply it again for a private re-index.
+Search and chat only accept repositories in `ready` state. Poll the repository detail endpoint (or use the UI) until `progress` reaches 100. Cancelling sets status `cancelled` and discards partial vectors, so the repository can be re-indexed cleanly. Saved conversations are stored as JSON under the backend data directory. A private-repository access token is sent only to Git during that clone: it is never written to the repository URL, Git config, application manifests, or logs. Supply it again for a private re-index.
+
+Symbol outlines use line-anchored patterns rather than per-language parsers: repository code is never executed, and unsupported languages return an empty outline instead of failing.
 
 ## Configuration and safeguards
 
@@ -127,13 +141,13 @@ backend/
   api/             FastAPI application and routes
   config/          Environment-backed provider and safeguard settings
   ingestion/       GitHub cloning and safe source discovery
-  retrieval/       Chunking, hybrid reranking, and citations
-  services/        Background index jobs and query orchestration
+  retrieval/       Chunking, hybrid reranking, symbol outlines, and citations
+  services/        Background index jobs, query orchestration, conversation store
   vectorstore/     Local JSON, Qdrant, Chroma, and FAISS adapters
   tests/           API and provider tests
 frontend/
   app/             Next.js interface and styles
-  components/      Repository, chat, search, and source-browser UI
+  components/      Repository, chat, search, insights, and source-browser UI
   lib/             Typed API client and SSE parser
 .github/workflows/ CI validation
 ```

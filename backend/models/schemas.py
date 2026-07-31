@@ -3,7 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
-RepositoryStatus = Literal["queued", "indexing", "ready", "failed"]
+RepositoryStatus = Literal["queued", "indexing", "ready", "failed", "cancelled"]
 
 
 class IndexRepositoryRequest(BaseModel):
@@ -113,6 +113,120 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: list[SourceCitation]
+
+
+class LanguageBreakdown(BaseModel):
+    language: str
+    file_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+    share: float = Field(ge=0, le=100)
+
+
+class FileWeight(BaseModel):
+    path: str
+    language: str
+    chunk_count: int = Field(ge=0)
+    character_count: int = Field(ge=0)
+
+
+class RepositoryInsights(BaseModel):
+    repository_id: str
+    owner: str
+    name: str
+    branch: str | None = None
+    indexed_at: datetime
+    file_count: int = Field(ge=0)
+    chunk_count: int = Field(ge=0)
+    total_characters: int = Field(ge=0)
+    average_chunk_characters: int = Field(ge=0)
+    languages: list[LanguageBreakdown]
+    largest_files: list[FileWeight]
+    documentation_files: list[str]
+
+
+class SymbolEntry(BaseModel):
+    name: str
+    kind: str
+    line: int = Field(ge=1)
+
+
+class FileOutline(BaseModel):
+    path: str
+    language: str
+    line_count: int = Field(ge=0)
+    symbols: list[SymbolEntry]
+
+
+class MultiSearchRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=2_000)
+    limit_per_repository: int = Field(default=3, ge=1, le=10)
+    repository_ids: list[str] = Field(default_factory=list, max_length=25)
+    languages: list[str] = Field(default_factory=list, max_length=20)
+    min_score: float = Field(default=0, ge=0, le=1)
+
+
+class RepositoryMatches(BaseModel):
+    repository_id: str
+    owner: str
+    name: str
+    sources: list[SourceCitation]
+
+
+class MultiSearchResult(BaseModel):
+    query: str
+    repositories: list[RepositoryMatches]
+
+
+class SimilarCodeRequest(BaseModel):
+    repository_id: str = Field(min_length=3, max_length=200)
+    path: str = Field(min_length=1, max_length=500)
+    line: int = Field(default=1, ge=1)
+    limit: int = Field(default=5, ge=1, le=20)
+
+
+class ConversationMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=16_000)
+    sources: list[SourceCitation] = Field(default_factory=list)
+
+
+class SaveConversationRequest(BaseModel):
+    repository_id: str = Field(min_length=3, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
+    messages: list[ConversationMessage] = Field(min_length=1, max_length=200)
+
+
+class Conversation(BaseModel):
+    id: str
+    repository_id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = Field(ge=0)
+    messages: list[ConversationMessage] = Field(default_factory=list)
+
+
+class ConversationSummary(BaseModel):
+    id: str
+    repository_id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = Field(ge=0)
+
+    @classmethod
+    def from_conversation(cls, conversation: "Conversation") -> "ConversationSummary":
+        return cls(**conversation.model_dump(exclude={"messages"}))
+
+
+class MetricsResponse(BaseModel):
+    repositories_total: int = Field(ge=0)
+    repositories_by_status: dict[str, int]
+    files_indexed: int = Field(ge=0)
+    chunks_indexed: int = Field(ge=0)
+    active_index_jobs: int = Field(ge=0)
+    conversations_saved: int = Field(ge=0)
+    providers: dict[str, str]
 
 
 class HealthResponse(BaseModel):

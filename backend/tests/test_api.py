@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Event
 from time import sleep
 
 from fastapi.testclient import TestClient
@@ -114,6 +115,98 @@ def test_optional_api_key_and_rate_limit(tmp_path: Path) -> None:
     limited = TestClient(create_app(Settings(data_dir=tmp_path / "limited", rate_limit_requests_per_minute=1)))
     assert limited.get("/api/repositories").status_code == 200
     assert limited.get("/api/repositories").status_code == 429
+
+
+def test_insights_outline_similar_and_metrics(tmp_path: Path) -> None:
+    repository_id = seed_index(tmp_path)
+    client = TestClient(create_app(Settings(data_dir=tmp_path)))
+
+    insights = client.get(f"/api/repositories/{repository_id}/insights")
+    assert insights.status_code == 200
+    payload = insights.json()
+    assert payload["chunk_count"] == 2
+    assert {item["language"] for item in payload["languages"]} == {"markdown", "python"}
+    assert payload["documentation_files"] == ["README.md"]
+    assert payload["largest_files"][0]["character_count"] > 0
+
+    outline = client.get(f"/api/repositories/{repository_id}/outline", params={"path": "src/app.py"})
+    assert outline.status_code == 200
+    assert outline.json()["symbols"] == [{"name": "run", "kind": "function", "line": 1}]
+
+    multi = client.post("/api/search/all", json={"query": "run the service", "limit_per_repository": 2})
+    assert multi.status_code == 200
+    assert multi.json()["repositories"][0]["repository_id"] == repository_id
+
+    similar = client.post("/api/similar", json={"repository_id": repository_id, "path": "README.md", "line": 1})
+    assert similar.status_code == 200
+    assert all(source["path"] != "README.md" or source["start_line"] != 1 for source in similar.json()["sources"])
+
+    metrics = client.get("/api/metrics").json()
+    assert metrics["repositories_total"] == 1
+    assert metrics["repositories_by_status"]["ready"] == 1
+    assert metrics["chunks_indexed"] == 2
+    assert metrics["providers"]["vector_store"] == "local"
+
+
+def test_conversation_persistence_and_export(tmp_path: Path) -> None:
+    repository_id = seed_index(tmp_path)
+    client = TestClient(create_app(Settings(data_dir=tmp_path)))
+
+    saved = client.post("/api/conversations", json={
+        "repository_id": repository_id,
+        "messages": [
+            {"role": "user", "content": "How do I run it?"},
+            {"role": "assistant", "content": "Use uvicorn.", "sources": [
+                {"path": "README.md", "start_line": 1, "end_line": 3, "score": 0.9, "excerpt": "Run the service"},
+            ]},
+        ],
+    })
+    assert saved.status_code == 201
+    conversation_id = saved.json()["id"]
+    assert saved.json()["title"] == "How do I run it?"
+
+    listing = client.get("/api/conversations", params={"repository_id": repository_id})
+    assert [item["id"] for item in listing.json()] == [conversation_id]
+
+    detail = client.get(f"/api/conversations/{conversation_id}")
+    assert detail.json()["messages"][1]["sources"][0]["path"] == "README.md"
+
+    export = client.get(f"/api/conversations/{conversation_id}/export")
+    assert export.status_code == 200
+    assert "text/markdown" in export.headers["content-type"]
+    assert "## Question" in export.text
+    assert "`README.md` lines 1-3" in export.text
+
+    assert client.delete(f"/api/conversations/{conversation_id}").status_code == 204
+    assert client.get(f"/api/conversations/{conversation_id}").status_code == 404
+
+
+def test_cancelling_an_index_job(tmp_path: Path, monkeypatch) -> None:
+    import services.repository_service as repository_service
+
+    release = Event()
+
+    def blocking_clone(repository, target, branch=None, access_token=None):
+        target.mkdir(parents=True, exist_ok=True)
+        release.wait(timeout=5)
+        return branch or "main"
+
+    monkeypatch.setattr(repository_service, "clone_repository", blocking_clone)
+    monkeypatch.setattr(repository_service, "discover_source_files", lambda *_: [
+        SourceFile(path="README.md", content="# Demo\nRun it.", language="markdown"),
+    ])
+    client = TestClient(create_app(Settings(data_dir=tmp_path, index_workers=1)))
+    queued = client.post("/api/repositories", json={"url": "https://github.com/acme/demo"})
+    repository_id = queued.json()["id"]
+
+    cancelled = client.post(f"/api/repositories/{repository_id}/cancel")
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    release.set()
+
+    assert client.post(f"/api/repositories/{repository_id}/cancel").status_code == 422
+    assert client.get(f"/api/repositories/{repository_id}").json()["status"] == "cancelled"
+    assert client.post("/api/search", json={"repository_id": repository_id, "query": "anything"}).status_code == 422
 
 
 def test_interrupted_jobs_are_recovered_on_startup(tmp_path: Path) -> None:

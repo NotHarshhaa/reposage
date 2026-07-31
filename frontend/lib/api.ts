@@ -1,4 +1,4 @@
-export type RepositoryStatus = "queued" | "indexing" | "ready" | "failed";
+export type RepositoryStatus = "queued" | "indexing" | "ready" | "failed" | "cancelled";
 
 export type Repository = {
   id: string;
@@ -34,6 +34,47 @@ export type Source = {
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 export type ChatResponse = { answer: string; sources: Source[] };
+
+export type LanguageBreakdown = { language: string; file_count: number; chunk_count: number; share: number };
+export type FileWeight = { path: string; language: string; chunk_count: number; character_count: number };
+export type RepositoryInsights = {
+  repository_id: string;
+  owner: string;
+  name: string;
+  branch: string | null;
+  indexed_at: string;
+  file_count: number;
+  chunk_count: number;
+  total_characters: number;
+  average_chunk_characters: number;
+  languages: LanguageBreakdown[];
+  largest_files: FileWeight[];
+  documentation_files: string[];
+};
+export type SymbolEntry = { name: string; kind: string; line: number };
+export type FileOutline = { path: string; language: string; line_count: number; symbols: SymbolEntry[] };
+export type RepositoryMatches = { repository_id: string; owner: string; name: string; sources: Source[] };
+export type MultiSearchResult = { query: string; repositories: RepositoryMatches[] };
+export type ConversationMessage = { role: "user" | "assistant"; content: string; sources?: Source[] };
+export type ConversationSummary = {
+  id: string;
+  repository_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+};
+export type Conversation = ConversationSummary & { messages: ConversationMessage[] };
+export type Metrics = {
+  repositories_total: number;
+  repositories_by_status: Record<string, number>;
+  files_indexed: number;
+  chunks_indexed: number;
+  active_index_jobs: number;
+  conversations_saved: number;
+  providers: Record<string, string>;
+};
+
 export type IndexRepositoryInput = { url: string; branch?: string; access_token?: string };
 export type SearchInput = {
   query: string;
@@ -75,9 +116,25 @@ export const api = {
   indexRepository: (input: IndexRepositoryInput) => request<Repository>("/api/repositories", { method: "POST", body: JSON.stringify(repositoryPayload(input)) }),
   reindexRepository: (repositoryId: string, input: Omit<IndexRepositoryInput, "url"> = {}) => request<Repository>(`/api/repositories/${encodeURIComponent(repositoryId)}/reindex`, { method: "POST", body: JSON.stringify(repositoryPayload(input as IndexRepositoryInput)) }),
   deleteRepository: (repositoryId: string) => request<void>(`/api/repositories/${encodeURIComponent(repositoryId)}`, { method: "DELETE" }),
+  cancelIndexing: (repositoryId: string) => request<Repository>(`/api/repositories/${encodeURIComponent(repositoryId)}/cancel`, { method: "POST" }),
+  insights: (repositoryId: string) => request<RepositoryInsights>(`/api/repositories/${encodeURIComponent(repositoryId)}/insights`),
+  outline: (repositoryId: string, path: string) => request<FileOutline>(`/api/repositories/${encodeURIComponent(repositoryId)}/outline?path=${encodeURIComponent(path)}`),
+  metrics: () => request<Metrics>("/api/metrics"),
   listFiles: (repositoryId: string) => request<RepositoryFile[]>(`/api/repositories/${encodeURIComponent(repositoryId)}/files`),
   getFile: (repositoryId: string, path: string) => request<RepositoryFile>(`/api/repositories/${encodeURIComponent(repositoryId)}/files/${path.split("/").map(encodeURIComponent).join("/")}`),
   search: (repositoryId: string, input: SearchInput) => request<{ query: string; sources: Source[] }>("/api/search", { method: "POST", body: JSON.stringify({ repository_id: repositoryId, limit: 8, ...input }) }),
+  searchAll: (input: SearchInput & { limit_per_repository?: number }) => request<MultiSearchResult>("/api/search/all", { method: "POST", body: JSON.stringify({ limit_per_repository: 3, ...input }) }),
+  similar: (repositoryId: string, path: string, line = 1) => request<{ query: string; sources: Source[] }>("/api/similar", { method: "POST", body: JSON.stringify({ repository_id: repositoryId, path, line }) }),
+  listConversations: (repositoryId?: string) => request<ConversationSummary[]>(`/api/conversations${repositoryId ? `?repository_id=${encodeURIComponent(repositoryId)}` : ""}`),
+  saveConversation: (repositoryId: string, messages: ConversationMessage[], title?: string) => request<Conversation>("/api/conversations", { method: "POST", body: JSON.stringify({ repository_id: repositoryId, messages, ...(title && { title }) }) }),
+  getConversation: (conversationId: string) => request<Conversation>(`/api/conversations/${encodeURIComponent(conversationId)}`),
+  deleteConversation: (conversationId: string) => request<void>(`/api/conversations/${encodeURIComponent(conversationId)}`, { method: "DELETE" }),
+  exportConversationUrl: (conversationId: string) => `${API_URL}/api/conversations/${encodeURIComponent(conversationId)}/export`,
+  async exportConversation(conversationId: string): Promise<{ filename: string; markdown: string }> {
+    const response = await fetch(api.exportConversationUrl(conversationId), { headers: headers() });
+    if (!response.ok) throw new Error(`Export failed with status ${response.status}.`);
+    return { filename: `reposage-${conversationId}.md`, markdown: await response.text() };
+  },
   chat: (repositoryId: string, question: string, history: ChatTurn[] = []) => request<ChatResponse>("/api/chat", { method: "POST", body: JSON.stringify({ repository_id: repositoryId, question, history }) }),
   async streamChat(
     repositoryId: string,

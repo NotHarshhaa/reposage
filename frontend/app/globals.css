@@ -27,6 +27,27 @@
     --radius: 0.625rem;
   }
 
+  .dark {
+    --background: 0.147 0.004 49.3;
+    --foreground: 0.985 0.001 106.4;
+    --card: 0.216 0.006 56.0;
+    --card-foreground: 0.985 0.001 106.4;
+    --popover: 0.216 0.006 56.0;
+    --popover-foreground: 0.985 0.001 106.4;
+    --primary: 0.923 0.003 48.7;
+    --primary-foreground: 0.216 0.006 56.0;
+    --secondary: 0.268 0.007 34.3;
+    --secondary-foreground: 0.985 0.001 106.4;
+    --muted: 0.268 0.007 34.3;
+    --muted-foreground: 0.709 0.01 56.3;
+    --accent: 0.268 0.007 34.3;
+    --accent-foreground: 0.985 0.001 106.4;
+    --destructive: 0.704 0.191 22.216;
+    --border: 0.31 0.008 40.0;
+    --input: 0.31 0.008 40.0;
+    --ring: 0.553 0.013 58.1;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
